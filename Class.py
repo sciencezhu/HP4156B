@@ -12,15 +12,14 @@
 import sys,visa,os, time
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
 
 
 class hp4156c(object):
-    def __init__(self,device_id=''):
+    def __init__(self,device_address='GPIB0::17::INSTR'):
         self.deviceName = "HEWLETT-PACKARD,4156B,0,02.10:03.06:01.00"
         print ("test")
-        self.device_id = device_id
-        self._initialise()
+#        self.device_id = device_id
+        self._initialise(address=device_address)
 
     def _initialise(self, address='GPIB0::17::INSTR'):
         """Iterates through all devices on the GPIB bus until it finds the
@@ -92,9 +91,12 @@ class hp4156c(object):
     def OutputSequence(self, str_arg="SMU1,SMU2,SMU3"):
         """format conversion for variable arguments to parameter analyser
         ascii"""
-        self.pa.write(":PAGE:MEASure:OSEQuence:MODE SEQuential")
+        self.pa.write(":PAGE:MEAS:OSEQ")
+#        self.pa.write(":PAGE:MEASure:OSEQuence:MODE SEQuential") //Only used under sampling mode
         self.pa.write(":PAGE:MEAS:OSEQ:OSEQ " + str_arg )
-        time.sleep(3)
+        self.pa.write(":PAGE:MEAS:OSEQ:TRIG ON")
+        self.pa.write(":PAGE:MEAS:OSEQ:TRIG:TIME 0.01")
+        time.sleep(1)
 
     def disableSmu(self,arg):
         """Disables all SMUs specified in arg"""
@@ -111,8 +113,7 @@ class hp4156c(object):
         String = ":PAGE:MEAS:CONS:" + SMU
         self.pa.write(String + " " + Value)
         self.pa.write(String + ":COMP " + Compl)
-        time.sleep(1)
-
+#        time.sleep(1)
 
     ## arg1 is the smu number
     ## arg2 is the parameters for a sweep. [LIN:LOG SING:DOUB STAR STEP STOP COMP]
@@ -155,7 +156,7 @@ class hp4156c(object):
             except:
                 print("Command Timeout!")
 #			read = self.pa.read() # returns unicode string of values
-            time.sleep(3)
+            time.sleep(1)
             if True:
                 read = self.pa.read_raw()
 #				print (read)
@@ -174,75 +175,7 @@ class hp4156c(object):
         self.data=np.transpose(np.array(self.data))
         print ("data in an {} array".format(self.data.shape))
         self.df_data = pd.DataFrame(self.data, columns = values)
-        self.df_data.to_csv("test_pandas.csv", index=False)
-
-
-    def IGSS_Plot(self, plotname):
-        self.df_data.sort_values('VDS', inplace=True)
-        grouped = self.df_data.groupby('VDS')
-
-        fig, ax1 = plt.subplots(nrows=1, ncols=1)
-#        ax1.margins(0.2)
-        ax1.legend()
-        ax1.set_xlabel('VG(V)', **{"size":'x-large'})
-        ax1.set_ylabel('Abs(IG(A))', **{"size":'x-large'})
-        ax1.set_yscale('log')
-
-        fig.suptitle('IGSS vs. VG', fontsize=20)
-
-        for key, group in grouped:
-            ax1.plot(group.VG, abs(group.IG), marker='o', linestyle='-', ms=8, label=key)
-        fig.savefig(plotname + '.png') 
-        plt.close()
-
-
-    def TransferCuve_Plot(self, plotname, separate = True):
-        self.df_data.sort_values('VDS', inplace=True)
-        grouped = self.df_data.groupby('VDS')
-        
-        if separate != False:
-            fig, [ax1, ax2] = plt.subplots(nrows=1, ncols=2)
-            ax1.margins(0.2)
-            ax2.margins(0.2)
-            ax1.legend()
-            ax1.set_xlabel('VG(V)', **{"size":'x-large'})
-            ax1.set_ylabel('ID(A)', **{"size":'x-large'})
-
-            ax2.legend()
-            ax2.set_xlabel('VG(V)', **{"size":'x-large'})
-            ax2.set_ylabel('abs (IG(A))', **{"size":'x-large'})
-            ax2.yaxis.set_label_position("right")
-
-            fig.suptitle('Transfer Curve', fontsize=20)
-            
-            for key, group in grouped:
-                ax1.plot(group.VG, group.ID, marker='o', linestyle='-', ms=8, label=key)
-                ax2.plot(group.VG, abs(group.IG), marker='^', linestyle='--', ms=8, label=key)             
-            fig.savefig(plotname + '_Separated.png') 
-            
-        else:
-            fig = plt.figure()
-            ax1 = fig.add_subplot(111)
-            ax1.set_xlabel('VG(V)', **{"size":'x-large'})
-            ax1.set_ylabel('ID(A)', **{"size":'x-large'})
-            ax1.legend()            
-
-            ax2=ax1.twinx()
-            ax2.set_ylabel('Abs(IG)', **{"size":'x-large'})
-            ax2.set_yscale('log')
-
-            ax1.margins(0.2)
-            ax2.margins(0.2)
-            fig.suptitle('Transfer Curve \n Solid: $I_{D}$  Dash: Abs($I_{G})$', fontsize=15)
-            
-            for key, group in grouped:
-                ax1.plot(group.VG, group.ID, marker='o', linestyle='-', ms=8, label=key)
-                ax2.plot(group.VG, abs(group.IG), marker='^', linestyle='--', ms=8, label=key)
-            
-            fig.savefig(plotname + '_TrasferCurve_Combined.png')            
-        
-        plt.close()
-
+#        self.df_data.to_csv("test_pandas.csv", index=False)
 
     def save_data(self,fname,savedir):
         header=""
@@ -254,15 +187,14 @@ class hp4156c(object):
     def collect_data(self,values,fname,savedir):
         """combines data acquisition and saving in a single function"""
         self.daq(values)
-        self.save_data(fname, savedir)
+#        self.save_data(fname, savedir)
 
     def single(self):
         """Initiate a single measurement using entered parameters"""
         self.pa.write(":PAGE:SCON:SING")
         self.pa.write("*WAI")
         self.pa.timeout=1E6 #if you need more than 11.6 days you're fucked
-#		time.sleep(5)
-        self.pa.ask("*OPC?")
+        self.pa.query("*OPC?")
         self.pa.timeout=30000
 
 
@@ -338,7 +270,7 @@ class hp4156c(object):
     def get_error(self, v=True):
         """Returns the first value in the error register"""
         print ("Error occured")
-        err=self.pa.ask(":SYST:ERR?")
+        err=self.pa.query(":SYST:ERR?")
         if v:
             print("Error is: " + err)
         return err
